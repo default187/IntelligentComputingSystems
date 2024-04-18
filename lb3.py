@@ -1,8 +1,5 @@
 """
-    вариант 1 лаба 3
-    реализация машинного обучения для игры Шесть пешек (Гарднер)
-    по принципу MANAVE (Matchbox Educable Naughts And Crosses Engine) by Donald Michie
-    по теории (https://ru.wikipedia.org/wiki/Hexapawn) из статьи на поле 3x3 всегда будут побеждать черные при оптимальной игре
+    реализация машинного обучения для игры 8 пешек (Гарднер)
 """
 
 
@@ -127,7 +124,7 @@ def is_end_pos(variation):
 def machine_lerning(variation):
     global ai
     global variations
-    poss_of_pons = "222000111"
+    poss_of_pons = "2222000000001111"
     
     for i in range(3000):
         move_for_wight = []
