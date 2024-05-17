@@ -1,4 +1,4 @@
-#Задача 8 пешек
+# Задача 8 пешек
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
