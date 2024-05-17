@@ -1,194 +1,73 @@
-"""
-    реализация машинного обучения для игры 8 пешек (Гарднер)
-"""
+#Задача 8 пешек
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten, Reshape
+from tensorflow.keras.optimizers import Adam
 
+# Параметры
+n = 8
+input_size = n * n
+hidden_size = 64
+output_size = n * n
+learning_rate = 0.001
+episodes = 10000
 
-import copy
-import random
+# Создание модели
+model = Sequential([
+    Flatten(input_shape=(n, n)),
+    Dense(hidden_size, activation='relu'),
+    Dense(output_size, activation='linear'),
+    Reshape((n, n))
+])
 
-variations = {1:{},2:{}}
-size = 4
-ai = 0
+model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
 
-def generate_variations(variation, bot: bool):
-    
-    if not variation:
-        return None
-           
-    # global variables
-    
-    # if bot is True:
-    for i in range(size):
-        for j in range(size):
-            if bot is True:
-                if variation[i][j] == 2:
-                    # print(i,j)
-                    generate_variations(validate_variation((i,j),(i+1,j), copy.deepcopy(variation) ), not bot)
-                    generate_variations(validate_variation((i,j),(i+1,j+1), copy.deepcopy(variation) ), not bot)
-                    generate_variations(validate_variation((i,j),(i+1,j-1), copy.deepcopy(variation) ), not bot)
-            else:
-                if variation[i][j] == 1:
-                    # print(i,j)
-                    generate_variations(validate_variation((i,j),(i-1,j), copy.deepcopy(variation) ), not bot)
-                    generate_variations(validate_variation((i,j),(i-1,j-1), copy.deepcopy(variation) ), not bot)
-                    generate_variations(validate_variation((i,j),(i-1,j+1), copy.deepcopy(variation) ), not bot)
+def is_valid(board):
+    rows = np.sum(board, axis=1)
+    cols = np.sum(board, axis=0)
+    if not np.all(rows <= 1) or not np.all(cols <= 1):
+        return False
+    main_diag = [np.sum(np.diag(board, k)) for k in range(-n+1, n)]
+    anti_diag = [np.sum(np.diag(np.fliplr(board), k)) for k in range(-n+1, n)]
+    if not np.all(np.array(main_diag) <= 1) or not np.all(np.array(anti_diag) <= 1):
+        return False
+    return True
 
-    
-    
-    
-def validate_variation(pon_pos, next_pon_pos, variation):
-    
-    if is_end_pos(variation):
-        return []
-    
-    if variation[pon_pos[0]][pon_pos[1]] == 0:
-        return []
-    
-    # global variations
-    # print(variations)
-    
-    deltax = abs(pon_pos[0] - next_pon_pos[0])
-    deltay = abs(pon_pos[1] - next_pon_pos[1])
-    
-    if (0 <= pon_pos[0] < size and 0 <= pon_pos[1] < size 
-        and 0 <= next_pon_pos[0] < size and 0 <= next_pon_pos[1] < size):
-        
-        if deltay == 1:
-            if (variation[next_pon_pos[0]][next_pon_pos[1]] not in [variation[pon_pos[0]][pon_pos[1]], 0]):
-                # if variation not in variations: 
-                #     variations[](copy.deepcopy(variation))
-                
-                var = from_list_to_string(copy.deepcopy(variation))
-                # var2 = from_list_to_string((pon_pos,next_pon_pos))
-                
-                next_var = from_list_to_string(get_next_variation(pon_pos, next_pon_pos, copy.deepcopy(variation)))
-                
-                if var not in variations[variation[pon_pos[0]][pon_pos[1]]]: 
-                    variations[variation[pon_pos[0]][pon_pos[1]]][var] = {}
-                variations[variation[pon_pos[0]][pon_pos[1]]][var][next_var] = 1
-                
-                return get_next_variation(pon_pos, next_pon_pos, copy.deepcopy(variation))
-            else:
-                return []
-        
-        elif deltax == 1:
-            if (variation[next_pon_pos[0]][next_pon_pos[1]] == 0):
-    
-                var = from_list_to_string(copy.deepcopy(variation))
-                
-                next_var = from_list_to_string(get_next_variation(pon_pos, next_pon_pos, copy.deepcopy(variation)))
-                
-                if var not in variations[variation[pon_pos[0]][pon_pos[1]]]: 
-                    variations[variation[pon_pos[0]][pon_pos[1]]][var] = {}
-                variations[variation[pon_pos[0]][pon_pos[1]]][var][next_var] = 1
-                return get_next_variation(pon_pos, next_pon_pos, copy.deepcopy(variation))
-            else:
-                return []
-                
+def get_reward(board):
+    if np.sum(board) != n:
+        return -1
+    if is_valid(board):
+        return 1
+    return -1
 
+# Обучение модели
+for episode in range(episodes):
+    board = np.zeros((n, n))
+    for step in range(n):
+        q_values = model.predict(board[np.newaxis])
+        action = np.unravel_index(np.argmax(q_values), (n, n))
+        board[action] = 1
+        reward = get_reward(board)
+        if reward == 1:
+            break
+        elif reward == -1:
+            board[action] = 0
+    target = reward
+    target_f = model.predict(board[np.newaxis])
+    target_f[0][action] = target
+    model.fit(board[np.newaxis], target_f, epochs=1, verbose=0)
 
-def get_next_variation(pon_pos, next_pon_pos, variation):
-    # print(variation[pon_pos[0]][pon_pos[1]])
-    
-     
-    variation[next_pon_pos[0]][next_pon_pos[1]] = variation[pon_pos[0]][pon_pos[1]]
-    variation[pon_pos[0]][pon_pos[1]] = 0
-    
-    
-    return variation
+# Тестирование модели
+def print_board(board):
+    for row in board:
+        print(" ".join(str(int(x)) for x in row))
 
-# def is_end_pos(variation):
-#     if 
+test_board = np.zeros((n, n))
+for step in range(n):
+    q_values = model.predict(test_board[np.newaxis])
+    action = np.unravel_index(np.argmax(q_values), (n, n))
+    test_board[action] = 1
 
-def from_list_to_string(variation):
-    string = ""
-    
-    for i in variation:
-        for j in i:
-            string += str(j)
-    
-    return string
-
-def is_end_pos(variation):
-    if 1 in variation[0]:
-        return True
-    elif 2 in variation[-1]:
-        return True
-    
-    if (not '1'  in from_list_to_string(variation) or
-        not '2' in from_list_to_string(variation)):
-         return True
-     
-    return False
-
-def machine_lerning(variation):
-    global ai
-    global variations
-    poss_of_pons = "2222000000001111"
-    
-    for i in range(3000):
-        move_for_wight = []
-        move_for_black = []
-        
-        while True:
-            print_matrix_str(poss_of_pons)
-            # ways = variation[ai+1][poss_of_pons]
-            try:
-                ways = variation[ai+1][poss_of_pons]
-            except Exception as e:
-                if ai:
-                    for i in move_for_wight:
-                        variations[1][i[0]][i[1]] += 1
-                    for i in move_for_black:
-                        if variations[2][i[0]][i[1]] > 1:
-                            variations[2][i[0]][i[1]] -= 1
-                    print('white won')
-                else:
-                    for i in move_for_wight:
-                        if variations[1][i[0]][i[1]] > 1: 
-                            variations[1][i[0]][i[1]] -= 1
-                    for i in move_for_black:
-                        variations[2][i[0]][i[1]] += 1
-                    print('black won')
-                print('--------------')
-
-                break
-            ways2 = []
-            
-            for key, val in ways.items():
-                for _ in range(val):
-                    ways2.append(key)
-            random.shuffle(ways2)
-            poss_of_pons2 = random.choice(ways2)
-
-            if ai:
-                move_for_black.append((poss_of_pons, poss_of_pons2))
-            else:
-                move_for_wight.append((poss_of_pons, poss_of_pons2))
-                
-            poss_of_pons = poss_of_pons2   
-            ai = (ai+1)%2
-        ai = 0
-        poss_of_pons = "2222000000001111"
-            
-def print_matrix_str(matrix: str):
-    global size
-    for i in range(0,len(matrix),size):
-        print(matrix[i:i+size])
-    print('🔻')
-        
-        
-
-var = [
-    [2,2,2,2],
-    [0,0,0,0],
-    [0,0,0,0],
-    [1,1,1,1],
-    
-]
-
-generate_variations(copy.deepcopy(var), False)
-print(variations)
-print("generating of variations's done")
-
-machine_lerning(variations)
+print("Решение:")
+print_board(test_board)
