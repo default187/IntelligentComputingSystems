@@ -1,73 +1,89 @@
-# Задача 8 пешек
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten, Reshape
-from tensorflow.keras.optimizers import Adam
+import random
 
-# Параметры
-n = 8
-input_size = n * n
-hidden_size = 64
-output_size = n * n
-learning_rate = 0.001
-episodes = 10000
+# Параметры задачи
+n = 8  # Размер доски n x n
+population_size = 100  # Размер популяции
+generations = 10000  # Максимальное количество поколений
+mutation_rate = 0.01  # Вероятность мутации
 
-# Создание модели
-model = Sequential([
-    Flatten(input_shape=(n, n)),
-    Dense(hidden_size, activation='relu'),
-    Dense(output_size, activation='linear'),
-    Reshape((n, n))
-])
+def create_individual():
+    """Создает индивидуальную расстановку шашек"""
+    return np.random.permutation(n)
 
-model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+def create_population(size):
+    """Создает начальную популяцию заданного размера"""
+    return [create_individual() for _ in range(size)]
 
-def is_valid(board):
-    rows = np.sum(board, axis=1)
-    cols = np.sum(board, axis=0)
-    if not np.all(rows <= 1) or not np.all(cols <= 1):
-        return False
-    main_diag = [np.sum(np.diag(board, k)) for k in range(-n+1, n)]
-    anti_diag = [np.sum(np.diag(np.fliplr(board), k)) for k in range(-n+1, n)]
-    if not np.all(np.array(main_diag) <= 1) or not np.all(np.array(anti_diag) <= 1):
-        return False
-    return True
+def fitness(individual):
+    """Оценивает расстановку по количеству неатакующих шашек"""
+    conflicts = 0
+    for i in range(n):
+        for j in range(i + 1, n):
+            if abs(individual[i] - individual[j]) == abs(i - j):
+                conflicts += 1
+    return n * (n - 1) / 2 - conflicts
 
-def get_reward(board):
-    if np.sum(board) != n:
-        return -1
-    if is_valid(board):
-        return 1
-    return -1
+def select(population):
+    """Выбирает лучшие расстановки для создания следующего поколения"""
+    weights = [fitness(individual) for individual in population]
+    return random.choices(population, weights=weights, k=len(population))
 
-# Обучение модели
-for episode in range(episodes):
-    board = np.zeros((n, n))
-    for step in range(n):
-        q_values = model.predict(board[np.newaxis])
-        action = np.unravel_index(np.argmax(q_values), (n, n))
-        board[action] = 1
-        reward = get_reward(board)
-        if reward == 1:
-            break
-        elif reward == -1:
-            board[action] = 0
-    target = reward
-    target_f = model.predict(board[np.newaxis])
-    target_f[0][action] = target
-    model.fit(board[np.newaxis], target_f, epochs=1, verbose=0)
+def crossover(parent1, parent2):
+    """Создает потомство путем комбинирования двух родителей"""
+    point = random.randint(0, n - 1)
+    child = np.concatenate((parent1[:point], parent2[point:]))
+    if len(set(child)) < n:  # Убедиться, что потомство - это перестановка
+        child = np.random.permutation(n)
+    return child
 
-# Тестирование модели
-def print_board(board):
+def mutate(individual):
+    """Случайно изменяет расстановку (мутация)"""
+    if random.random() < mutation_rate:
+        i, j = random.sample(range(n), 2)
+        individual[i], individual[j] = individual[j], individual[i]
+    return individual
+
+def genetic_algorithm():
+    """Основной цикл генетического алгоритма"""
+    population = create_population(population_size)
+    
+    for generation in range(generations):
+        population = select(population)
+        new_population = []
+        
+        for i in range(0, population_size, 2):
+            parent1, parent2 = population[i], population[i + 1]
+            child1, child2 = crossover(parent1, parent2), crossover(parent2, parent1)
+            new_population.extend([mutate(child1), mutate(child2)])
+        
+        population = new_population
+        
+        # Проверка на решение
+        for individual in population:
+            if fitness(individual) == n * (n - 1) / 2:
+                return individual, generation
+        
+        # Вывод текущего поколения и наилучшего результата
+        best_fitness = max(fitness(ind) for ind in population)
+        print(f"Эпоха {generation}: лучший результат {best_fitness}") #best_fitness - мера качества расстановки ферзей на доске (n*(n-1)/2)
+    
+    return None, generations
+
+def print_board(individual):
+    """Выводит доску с расстановкой шашек"""
+    board = np.zeros((n, n), dtype=int)
+    for row, col in enumerate(individual):
+        board[row, col] = 1
     for row in board:
-        print(" ".join(str(int(x)) for x in row))
+        print(" ".join(str(x) for x in row))
 
-test_board = np.zeros((n, n))
-for step in range(n):
-    q_values = model.predict(test_board[np.newaxis])
-    action = np.unravel_index(np.argmax(q_values), (n, n))
-    test_board[action] = 1
+# Запуск генетического алгоритма
+solution, gen = genetic_algorithm()
 
-print("Решение:")
-print_board(test_board)
+# Вывод результата
+if solution is not None:
+    print(f"Решение найдено на поколении {gen}:")
+    print_board(solution)
+else:
+    print("Решение не найдено.")
